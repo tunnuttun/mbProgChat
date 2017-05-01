@@ -26,6 +26,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,30 +68,28 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //Find session_id first]
-        int checkFile = 0;
+        //Find session_id file
+        boolean isSessionFile;
         try {
+            isSessionFile = true;
             FileInputStream fileInputStream = openFileInput("session_id");
             mSession_id = convertStreamToString(fileInputStream);
             fileInputStream.close();
             fileInputStream = openFileInput("username");
             mUsername = convertStreamToString(fileInputStream);
             fileInputStream.close();
-        } catch (FileNotFoundException e){
-            e.printStackTrace();
-            checkFile = 1;
         } catch (Exception e) {
             e.printStackTrace();
-            checkFile = 1;
+            isSessionFile = false;
         }
 
-        //Create layout
-
-        if(checkFile == 1){
+        if(!isSessionFile){
             startActivity(new Intent(this,LoginActivity.class));
             finish();
         }
 
+
+        //Create layout
         setContentView(R.layout.activity_main);
         myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
@@ -100,8 +100,20 @@ public class MainActivity extends AppCompatActivity {
         //initialize list
         mFriendListView = (ListView) findViewById(R.id.friendList);
 
-        if(checkFile == 0)
+        if(isSessionFile) {
+            try{
+                FileInputStream fileInputStream = openFileInput("contact_list");
+                ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
+                mContactList = (List<String>) objectInputStream.readObject();
+                objectInputStream.close();
+                fileInputStream.close();
+                setFriendListAdapter();
+            } catch (Exception e){
+                e.printStackTrace();
+                mContactList=null;
+            }
             new ContactListTask().execute();
+        }
     }
 
     //Convert streaminput bytes to string
@@ -136,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public class ContactListTask extends AsyncTask<Void, Void, List<String>>{
+    private class ContactListTask extends AsyncTask<Void, Void, List<String>>{
 
         @Override
         protected List<String> doInBackground(Void... params) {
@@ -154,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
                     CharSequence text = "Unexpected Error!, please try logout";
                     Toast toast = Toast.makeText(getApplicationContext(),text,Toast.LENGTH_LONG);
                     toast.show();
+                    return null;
                 }
                 else{
                     //Valid session id
@@ -168,14 +181,32 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (JSONException e) {
                 e.printStackTrace();
+                return null;
             }
-            return null;
+
         }
 
         @Override
-        protected void onPostExecute(List<String> arrayList) {
-            mContactList = arrayList;
-            setFriendListAdapter();
+        protected void onPostExecute(List<String> list) {
+            if(list == null) return;
+
+            //if list not equal, save the list and set ListAdapter
+            if(mContactList==null || !mContactList.equals(list)){
+                FileOutputStream outputStream = null;
+                try {
+                    outputStream = openFileOutput("contact_list", Context.MODE_PRIVATE);
+                    ObjectOutputStream objectOutputStream =  new ObjectOutputStream(outputStream);
+                    objectOutputStream.writeObject(list);
+                    objectOutputStream.close();
+                    outputStream.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                mContactList = list;
+                setFriendListAdapter();
+            }
+
+            //If list was equal, do nothing.
         }
     }
 
