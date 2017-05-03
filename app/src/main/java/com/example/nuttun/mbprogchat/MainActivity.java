@@ -8,10 +8,17 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -29,16 +36,26 @@ import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 
 public class MainActivity extends AppCompatActivity {
 
     private ListView mFriendListView;
     private List<String> mContactList;
+
+    private LinearLayout mAddFriendLayout;
+    private EditText mSearchField;
+    private ListView mSearchedUserListView;
+    private List<String> mSearchedUserList;
+
     private String mSession_id;
     private String mUsername;
+
     private Toolbar myToolbar;
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
@@ -48,15 +65,31 @@ public class MainActivity extends AppCompatActivity {
         public boolean onNavigationItemSelected(@NonNull MenuItem item) {
             switch (item.getItemId()) {
                 case R.id.navigation_friend:
-                    //mTextMessage.setText(mUsername + ": " + mSession_id);
+                    //Set toolbar
                     setSupportActionBar(myToolbar);
                     getSupportActionBar().setTitle("Friend List");
 
+                    //set visibility
+                    mAddFriendLayout.setVisibility(View.INVISIBLE);
+                    mFriendListView.setVisibility(View.VISIBLE);
+
+                    //Set list adapter
+                    setFriendListAdapter();
+
+                    //Check if list is updated
+                    new ContactListTask().execute();
+
                     return true;
                 case R.id.navigation_addFriend:
-                    //mTextMessage.setText(R.string.title_dashboard);
+                    //Set toolbar
                     setSupportActionBar(myToolbar);
                     getSupportActionBar().setTitle("Add Friend");
+
+                    //set visibility
+                    mAddFriendLayout.setVisibility(View.VISIBLE);
+                    mFriendListView.setVisibility(View.INVISIBLE);
+
+
                     return true;
             }
             return false;
@@ -97,6 +130,38 @@ public class MainActivity extends AppCompatActivity {
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
         navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
 
+        //initialize search field and searched list
+        mAddFriendLayout = (LinearLayout) findViewById(R.id.add_friend_layout);
+        mSearchedUserListView = (ListView) findViewById(R.id.searched_user_list_view);
+        mSearchField = (EditText) findViewById(R.id.search_field);
+        mAddFriendLayout.setVisibility(View.INVISIBLE);
+        mSearchField.addTextChangedListener(
+                new TextWatcher() {
+                    @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+
+                    private Timer timer=new Timer();
+                    private final long DELAY = 2000; // milliseconds
+
+                    @Override
+                    public void afterTextChanged(final Editable s) {
+                        timer.cancel();
+                        timer = new Timer();
+                        timer.schedule(
+                                new TimerTask() {
+                                    @Override
+                                    public void run() {
+                                        //HTTP request searched list
+                                        String searchInput = mSearchField.getText().toString();
+                                        new SearchUserTask().execute(searchInput);
+                                    }
+                                },
+                                DELAY
+                        );
+                    }
+                }
+        );
+
         //initialize list
         mFriendListView = (ListView) findViewById(R.id.friendList);
 
@@ -116,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //Convert streaminput bytes to string
+    //Convert stream input bytes to string
     public static String convertStreamToString(InputStream is) throws Exception {
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         StringBuilder sb = new StringBuilder();
@@ -149,7 +214,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private class ContactListTask extends AsyncTask<Void, Void, List<String>>{
-
         @Override
         protected List<String> doInBackground(Void... params) {
             HTTPHelper helper = new HTTPHelper();
@@ -178,12 +242,10 @@ public class MainActivity extends AppCompatActivity {
                     }
                     return contactList;
                 }
-
             } catch (JSONException e) {
                 e.printStackTrace();
                 return null;
             }
-
         }
 
         @Override
@@ -205,7 +267,6 @@ public class MainActivity extends AppCompatActivity {
                 mContactList = list;
                 setFriendListAdapter();
             }
-
             //If list was equal, do nothing.
         }
     }
@@ -214,6 +275,63 @@ public class MainActivity extends AppCompatActivity {
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, mContactList);
         mFriendListView.setAdapter(adapter);
+    }
+
+    private void setSearchedUserListAdapter() {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_1, mSearchedUserList);
+        mSearchedUserListView.setAdapter(adapter);
+        // Check if no view has focus:
+        View view = this.getCurrentFocus();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+    }
+
+    private class SearchUserTask extends AsyncTask<String, Void, List<String>>{
+
+        @Override
+        protected List<String> doInBackground(String... username) {
+            HTTPHelper helper = new HTTPHelper();
+            HashMap<String,String> hm = new HashMap<>();
+            hm.put("sessionid",mSession_id.trim());
+            hm.put("keyword", username[0].trim());
+            String result = helper.POST("https://mis.cp.eng.chula.ac.th/mobile/service.php?q=api/searchUser",hm);
+            JSONObject obj = null;
+            List<String> searchedUser = new ArrayList<String>();
+            try {
+                obj = new JSONObject(result);
+                String return_type = obj.getString("type");
+                if(return_type.equals("error")){
+                    //Invalid session_id
+                    CharSequence text = "search user error";
+                    Toast toast = Toast.makeText(getApplicationContext(),text,Toast.LENGTH_SHORT);
+                    toast.show();
+                    return null;
+                }
+                else{
+                    //Valid session id
+                    JSONArray jsonArray = obj.getJSONArray("content");
+                    if (jsonArray != null) {
+                        for (int i=0;i<jsonArray.length();i++){
+                            searchedUser.add(jsonArray.getString(i));
+                        }
+                    }
+                    return searchedUser;
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(List<String> searchedUser) {
+            mSearchedUserList = searchedUser;
+            if(mSearchedUserList == null) mSearchedUserList = new ArrayList<>();
+            setSearchedUserListAdapter();
+        }
     }
 
 

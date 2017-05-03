@@ -24,6 +24,28 @@
         android:layout_weight="1">
 
 
+        <LinearLayout
+            android:id="@+id/add_friend_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/search_field"
+                android:layout_width="match_parent"
+                android:layout_height="59dp"
+                android:ems="10"
+                android:hint="'Username'"
+                android:inputType="textPersonName" />
+
+            <ListView
+                android:id="@+id/searched_user_list_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+        </LinearLayout>
+
         <ListView
             android:id="@+id/friendList"
             android:layout_width="match_parent"
