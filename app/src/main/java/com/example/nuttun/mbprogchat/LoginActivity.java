@@ -298,7 +298,6 @@ public class LoginActivity extends AppCompatActivity{//implements LoaderCallback
 
         @Override
         protected String doInBackground(Void... params) {
-            // TODO: attempt authentication against a network service.
             String token = null;
             try {
                 // Simulate network access.

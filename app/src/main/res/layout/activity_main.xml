@@ -26,6 +26,8 @@
 
         <LinearLayout
             android:id="@+id/add_friend_layout"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="10dp"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical">
@@ -35,7 +37,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="59dp"
                 android:ems="10"
-                android:hint="'Username'"
+                android:hint="Search username"
                 android:inputType="textPersonName" />
 
             <ListView
@@ -43,6 +45,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_weight="1" />
+            <TextView android:id="@android:id/empty"
+                android:textAlignment="center"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:text="\n\n No Results" />
 
         </LinearLayout>
 

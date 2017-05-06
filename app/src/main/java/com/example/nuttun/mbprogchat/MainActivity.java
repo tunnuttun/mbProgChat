@@ -1,11 +1,15 @@
 package com.example.nuttun.mbprogchat;
 
+import android.app.Dialog;
+import android.app.DialogFragment;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -15,11 +19,13 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -135,6 +141,9 @@ public class MainActivity extends AppCompatActivity {
         mSearchedUserListView = (ListView) findViewById(R.id.searched_user_list_view);
         mSearchField = (EditText) findViewById(R.id.search_field);
         mAddFriendLayout.setVisibility(View.INVISIBLE);
+        TextView emptyText = (TextView)findViewById(android.R.id.empty);
+        mSearchedUserListView.setOnItemClickListener(mSearchedFriendListClickedHandler);
+        mSearchedUserListView.setEmptyView(emptyText);
         mSearchField.addTextChangedListener(
                 new TextWatcher() {
                     @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
@@ -162,8 +171,9 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
-        //initialize list
+        //initialize friend list
         mFriendListView = (ListView) findViewById(R.id.friendList);
+        mFriendListView.setOnItemClickListener(mFriendListClickedHandler);
 
         if(isSessionFile) {
             try{
@@ -180,6 +190,7 @@ public class MainActivity extends AppCompatActivity {
             new ContactListTask().execute();
         }
     }
+
 
     //Convert stream input bytes to string
     public static String convertStreamToString(InputStream is) throws Exception {
@@ -212,6 +223,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return super.onOptionsItemSelected(item);
     }
+
 
     private class ContactListTask extends AsyncTask<Void, Void, List<String>>{
         @Override
@@ -271,24 +283,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setFriendListAdapter() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_list_item_1, mContactList);
-        mFriendListView.setAdapter(adapter);
-    }
-
-    private void setSearchedUserListAdapter() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_list_item_1, mSearchedUserList);
-        mSearchedUserListView.setAdapter(adapter);
-        // Check if no view has focus:
-        View view = this.getCurrentFocus();
-        if (view != null) {
-            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
-        }
-    }
-
     private class SearchUserTask extends AsyncTask<String, Void, List<String>>{
 
         @Override
@@ -304,10 +298,6 @@ public class MainActivity extends AppCompatActivity {
                 obj = new JSONObject(result);
                 String return_type = obj.getString("type");
                 if(return_type.equals("error")){
-                    //Invalid session_id
-                    CharSequence text = "search user error";
-                    Toast toast = Toast.makeText(getApplicationContext(),text,Toast.LENGTH_SHORT);
-                    toast.show();
                     return null;
                 }
                 else{
@@ -328,11 +318,138 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<String> searchedUser) {
-            mSearchedUserList = searchedUser;
-            if(mSearchedUserList == null) mSearchedUserList = new ArrayList<>();
-            setSearchedUserListAdapter();
+            if(searchedUser == null) mSearchedUserListView.setAdapter(null);
+            else {
+                if(mContactList != null) searchedUser.removeAll(mContactList);
+                mSearchedUserList = searchedUser;
+                setSearchedUserListAdapter();
+            }
+        }
+    }
+
+    private class addContactTask extends AsyncTask<String, Void, Boolean>{
+        private String thisUsername;
+
+        @Override
+        protected Boolean doInBackground(String... usernames) {
+            HTTPHelper helper = new HTTPHelper();
+            HashMap<String,String> hm = new HashMap<>();
+            thisUsername = usernames[0].trim();
+            hm.put("sessionid",mSession_id.trim());
+            hm.put("username", thisUsername);
+            String result = helper.POST("https://mis.cp.eng.chula.ac.th/mobile/service.php?q=api/addContact",hm);
+            JSONObject obj = null;
+            try {
+                obj = new JSONObject(result);
+                String return_type = obj.getString("type");
+                if(return_type.equals("error")){
+                    return false;
+                }
+                else{
+                    //Valid session id
+                    if(obj.getString("content").equals("false")){
+                        return false;
+                    } else{
+
+                        return true;
+                    }
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Boolean succeed) {
+            if(succeed){
+                String text = thisUsername + " has been added to friend list";
+                showToast(text);
+            }
+            else {
+                showToast("Unexpected Error!, try re-login");
+            }
+        }
+    }
+
+    private void setFriendListAdapter() {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_1, mContactList);
+        mFriendListView.setAdapter(adapter);
+    }
+
+    private void setSearchedUserListAdapter() {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_1, mSearchedUserList);
+        mSearchedUserListView.setAdapter(adapter);
+        // Check if no view has focus:
+        View view = this.getCurrentFocus();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
     }
 
 
+
+    private AdapterView.OnItemClickListener mSearchedFriendListClickedHandler = new AdapterView.OnItemClickListener() {
+        public void onItemClick(AdapterView parent, View v, int position, long id) {
+            // Create add friend dialog
+            new AddfriendDialogFragment().newInstance(position).show(getFragmentManager(),"addFriendTag");
+        }
+    };
+
+    private AdapterView.OnItemClickListener mFriendListClickedHandler = new AdapterView.OnItemClickListener() {
+        public void onItemClick(AdapterView parent, View v, int position, long id) {
+            String selectedUsername = mContactList.get(position);
+            startChatActivity(selectedUsername);
+        }
+    };
+
+    private void startChatActivity(String selectedUsername){
+        Intent intent = new Intent(this,ChatActivity.class);
+        intent.putExtra("selectedUsername",selectedUsername);
+        intent.putExtra("session_id",mSession_id);
+        this.startActivity(intent);
+    }
+
+
+    private class AddfriendDialogFragment extends DialogFragment{
+
+        public AddfriendDialogFragment newInstance(int index) {
+            AddfriendDialogFragment frag = new AddfriendDialogFragment();
+            Bundle args = new Bundle();
+            args.putInt("index", index);
+            frag.setArguments(args);
+            return frag;
+        }
+
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            int index = getArguments().getInt("index");
+            final String username = mSearchedUserList.get(index);
+            builder.setTitle("Confirm adding friend?")
+                    .setMessage("Add " + username + " to friend list")
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            //HTTP post to add contact
+                            new addContactTask().execute(username);
+                        }
+                    })
+                    .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            showToast("Adding friend cancel");
+                        }
+                    });
+            return builder.create();
+        }
+
+    }
+
+    private void showToast(String text){
+        Toast.makeText(getApplicationContext(),text,Toast.LENGTH_LONG).show();
+    }
 }
