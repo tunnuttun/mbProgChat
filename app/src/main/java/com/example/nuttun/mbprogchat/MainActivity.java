@@ -1,12 +1,19 @@
 package com.example.nuttun.mbprogchat;
 
+import com.example.nuttun.mbprogchat.MessageContract;
 import android.app.Dialog;
 import android.app.DialogFragment;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.annotation.IntegerRes;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
 import android.support.v7.app.AlertDialog;
@@ -19,6 +26,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.webkit.WebHistoryItem;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
@@ -150,8 +158,6 @@ public class MainActivity extends AppCompatActivity {
                     @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
 
                     private Timer timer=new Timer();
-                    private final long DELAY = 2000; // milliseconds
-
                     @Override
                     public void afterTextChanged(final Editable s) {
                         timer.cancel();
@@ -165,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
                                         new SearchUserTask().execute(searchInput);
                                     }
                                 },
-                                DELAY
+                                1000 //Delay values(milli sec)
                         );
                     }
                 }
@@ -175,6 +181,7 @@ public class MainActivity extends AppCompatActivity {
         mFriendListView = (ListView) findViewById(R.id.friendList);
         mFriendListView.setOnItemClickListener(mFriendListClickedHandler);
 
+        //Read friend list from file and refresh contact from internet
         if(isSessionFile) {
             try{
                 FileInputStream fileInputStream = openFileInput("contact_list");
@@ -189,8 +196,28 @@ public class MainActivity extends AppCompatActivity {
             }
             new ContactListTask().execute();
         }
+
+        //Read and write message database
+        repeatUpdateDb();
+
     }
 
+    private void repeatUpdateDb() {
+
+        final Handler handler = new Handler();
+        Timer timer = new Timer();
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                handler.post(new Runnable() {
+                    public void run() {
+                        new updateDbTask().execute();
+                    }
+                });
+            }
+        };
+        timer.schedule(task, 0, 60*1000);  // interval of one minute
+    }
 
     //Convert stream input bytes to string
     public static String convertStreamToString(InputStream is) throws Exception {
@@ -372,6 +399,87 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private class updateDbTask extends AsyncTask<Void, Void, Void>{
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            //Read db, get lasted seqno from db
+            String lasted_seqno = "1";
+            MessageDbHelper dbHelper = new MessageDbHelper(getApplicationContext());
+            SQLiteDatabase db = dbHelper.getReadableDatabase();
+            String[] projection = {MessageContract.MessageEntry.COLUMN_NAME_SEQNO};
+            Cursor cursor = db.query(MessageContract.MessageEntry.TABLE_NAME,
+                    projection,
+                    null,null,null,null,
+                    MessageContract.MessageEntry.COLUMN_NAME_SEQNO + " DESC"
+                    );
+            String lasted_seqno_in_db = "1";
+            if(cursor.moveToNext()) {
+                lasted_seqno = cursor.getString(0);
+                lasted_seqno_in_db = lasted_seqno;
+            }
+            cursor.close();
+
+            //Load all message from API
+            HTTPHelper helper = new HTTPHelper();
+            HashMap<String,String> hm = new HashMap<>();
+            hm.put("sessionid",mSession_id.trim());
+            JSONArray messageToBeUpdate = new JSONArray();
+            while (true){
+                hm.put("seqno",lasted_seqno);
+                String result = helper.POST("https://mis.cp.eng.chula.ac.th/mobile/service.php?q=api/getMessage",hm);
+                try {
+                    JSONObject jsonObject = new JSONObject(result);
+                    String type = jsonObject.getString("type");
+                    if(type.equalsIgnoreCase("error")){
+                        showToast("Error, try re-login");
+                        return null;
+                    }
+                    JSONArray content = jsonObject.getJSONArray("content");
+                    if(content.length()==0) break;
+                    lasted_seqno = content.getJSONObject(content.length()-1).getString("seqno");
+                    if(Integer.parseInt(lasted_seqno) > Integer.parseInt(lasted_seqno_in_db)){
+                        for(int i=0; i<content.length(); i++){
+                            int k = Integer.parseInt(content.getJSONObject(i).getString("seqno"));
+                            if(k <= Integer.parseInt(lasted_seqno_in_db)) continue;
+                            messageToBeUpdate.put(content.getJSONObject(i));
+                        }
+                    }
+                } catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+
+            //Update db
+            db = dbHelper.getWritableDatabase();
+            for(int i=0; i<messageToBeUpdate.length(); i++){
+                String seqno = null;
+                String datetime = null;
+                String from = null;
+                String to = null;
+                String message = null;
+                try {
+                    seqno = messageToBeUpdate.getJSONObject(i).getString("seqno");
+                    datetime = messageToBeUpdate.getJSONObject(i).getString("datetime");
+                    from = messageToBeUpdate.getJSONObject(i).getString("from");
+                    to = messageToBeUpdate.getJSONObject(i).getString("to");
+                    message = messageToBeUpdate.getJSONObject(i).getString("message");
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                ContentValues values = new ContentValues();
+                values.put(MessageContract.MessageEntry.COLUMN_NAME_SEQNO, seqno);
+                values.put(MessageContract.MessageEntry.COLUMN_NAME_DATETIME, datetime);
+                values.put(MessageContract.MessageEntry.COLUMN_NAME_FROM, from);
+                values.put(MessageContract.MessageEntry.COLUMN_NAME_TO, to);
+                values.put(MessageContract.MessageEntry.COLUMN_NAME_MESSAGE, message);
+                db.insert(MessageContract.MessageEntry.TABLE_NAME, null, values);
+            }
+
+            return null;
+        }
+    }
+
     private void setFriendListAdapter() {
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, mContactList);
@@ -450,6 +558,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showToast(String text){
-        Toast.makeText(getApplicationContext(),text,Toast.LENGTH_LONG).show();
+        Toast.makeText(getApplicationContext(),text,Toast.LENGTH_SHORT).show();
     }
 }

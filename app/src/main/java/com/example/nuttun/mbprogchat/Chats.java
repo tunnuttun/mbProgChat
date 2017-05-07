@@ -31,6 +31,7 @@ public class Chats extends Fragment implements OnClickListener {
     public static ChatAdapter chatAdapter;
     ListView msgListView;
 
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {

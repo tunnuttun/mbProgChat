@@ -21,11 +21,13 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-        new Chats();
+        Chats chat = new Chats();
+        chat.setArguments(getIntent().getExtras());
+        getFragmentManager().beginTransaction().add(R.id.fragment_container,chat).commit();
 
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
-        getSupportActionBar().setTitle("Chats with xxxx");
+        getSupportActionBar().setTitle("Chats with " + getIntent().getStringExtra("selectedUsername"));
     }
 
 }
