@@ -4,6 +4,7 @@ package com.example.nuttun.mbprogchat;
 import android.app.Activity;
 import android.app.FragmentManager;
 //import android.app.FragmentActivity;
+import android.graphics.Color;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.app.FragmentTransaction;
@@ -34,7 +35,7 @@ public class ChatActivity extends AppCompatActivity {
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
         getSupportActionBar().setTitle("Chats with " + getIntent().getStringExtra("selectedUsername"));
-
+        myToolbar.setTitleTextColor(Color.rgb(255,255,255));
     }
 
 
