@@ -1,6 +1,7 @@
 package com.example.nuttun.mbprogchat;
 
 //import android.app.Fragment;
+import android.app.Activity;
 import android.app.FragmentManager;
 //import android.app.FragmentActivity;
 import android.support.v4.app.FragmentActivity;
@@ -11,6 +12,11 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.support.v4.app.Fragment;
 
@@ -28,6 +34,9 @@ public class ChatActivity extends AppCompatActivity {
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
         getSupportActionBar().setTitle("Chats with " + getIntent().getStringExtra("selectedUsername"));
+
     }
+
+
 
 }

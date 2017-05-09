@@ -1,6 +1,8 @@
 package com.example.nuttun.mbprogchat;
 
 import com.example.nuttun.mbprogchat.MessageContract;
+
+import android.app.Activity;
 import android.app.Dialog;
 import android.app.DialogFragment;
 import android.content.ContentValues;
@@ -24,7 +26,9 @@ import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebHistoryItem;
 import android.widget.AdapterView;
@@ -171,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
                                         new SearchUserTask().execute(searchInput);
                                     }
                                 },
-                                1000 //Delay values(milli sec)
+                                500 //Delay values(milli sec)
                         );
                     }
                 }
@@ -180,6 +184,8 @@ public class MainActivity extends AppCompatActivity {
         //initialize friend list
         mFriendListView = (ListView) findViewById(R.id.friendList);
         mFriendListView.setOnItemClickListener(mFriendListClickedHandler);
+
+        setupUI(findViewById(R.id.main_parent_layout));
 
         //Read friend list from file and refresh contact from internet
         if(isSessionFile) {
@@ -202,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void repeatUpdateDb() {
+    public void repeatUpdateDb() {
 
         final Handler handler = new Handler();
         Timer timer = new Timer();
@@ -211,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 handler.post(new Runnable() {
                     public void run() {
-                        new updateDbTask().execute();
+                        new updateDbTask().execute(getApplicationContext(),mSession_id);
                     }
                 });
             }
@@ -399,86 +405,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class updateDbTask extends AsyncTask<Void, Void, Void>{
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            //Read db, get lasted seqno from db
-            String lasted_seqno = "1";
-            MessageDbHelper dbHelper = new MessageDbHelper(getApplicationContext());
-            SQLiteDatabase db = dbHelper.getReadableDatabase();
-            String[] projection = {MessageContract.MessageEntry.COLUMN_NAME_SEQNO};
-            Cursor cursor = db.query(MessageContract.MessageEntry.TABLE_NAME,
-                    projection,
-                    null,null,null,null,
-                    MessageContract.MessageEntry.COLUMN_NAME_SEQNO + " DESC"
-                    );
-            String lasted_seqno_in_db = "1";
-            if(cursor.moveToNext()) {
-                lasted_seqno = cursor.getString(0);
-                lasted_seqno_in_db = lasted_seqno;
-            }
-            cursor.close();
-
-            //Load all message from API
-            HTTPHelper helper = new HTTPHelper();
-            HashMap<String,String> hm = new HashMap<>();
-            hm.put("sessionid",mSession_id.trim());
-            JSONArray messageToBeUpdate = new JSONArray();
-            while (true){
-                hm.put("seqno",lasted_seqno);
-                String result = helper.POST("https://mis.cp.eng.chula.ac.th/mobile/service.php?q=api/getMessage",hm);
-                try {
-                    JSONObject jsonObject = new JSONObject(result);
-                    String type = jsonObject.getString("type");
-                    if(type.equalsIgnoreCase("error")){
-                        showToast("Error, try re-login");
-                        return null;
-                    }
-                    JSONArray content = jsonObject.getJSONArray("content");
-                    if(content.length()==0) break;
-                    lasted_seqno = content.getJSONObject(content.length()-1).getString("seqno");
-                    if(Integer.parseInt(lasted_seqno) > Integer.parseInt(lasted_seqno_in_db)){
-                        for(int i=0; i<content.length(); i++){
-                            int k = Integer.parseInt(content.getJSONObject(i).getString("seqno"));
-                            if(k <= Integer.parseInt(lasted_seqno_in_db)) continue;
-                            messageToBeUpdate.put(content.getJSONObject(i));
-                        }
-                    }
-                } catch (Exception e){
-                    e.printStackTrace();
-                }
-            }
-
-            //Update db
-            db = dbHelper.getWritableDatabase();
-            for(int i=0; i<messageToBeUpdate.length(); i++){
-                String seqno = null;
-                String datetime = null;
-                String from = null;
-                String to = null;
-                String message = null;
-                try {
-                    seqno = messageToBeUpdate.getJSONObject(i).getString("seqno");
-                    datetime = messageToBeUpdate.getJSONObject(i).getString("datetime");
-                    from = messageToBeUpdate.getJSONObject(i).getString("from");
-                    to = messageToBeUpdate.getJSONObject(i).getString("to");
-                    message = messageToBeUpdate.getJSONObject(i).getString("message");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                ContentValues values = new ContentValues();
-                values.put(MessageContract.MessageEntry.COLUMN_NAME_SEQNO, seqno);
-                values.put(MessageContract.MessageEntry.COLUMN_NAME_DATETIME, datetime);
-                values.put(MessageContract.MessageEntry.COLUMN_NAME_FROM, from);
-                values.put(MessageContract.MessageEntry.COLUMN_NAME_TO, to);
-                values.put(MessageContract.MessageEntry.COLUMN_NAME_MESSAGE, message);
-                db.insert(MessageContract.MessageEntry.TABLE_NAME, null, values);
-            }
-
-            return null;
-        }
-    }
 
     private void setFriendListAdapter() {
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
@@ -490,12 +416,14 @@ public class MainActivity extends AppCompatActivity {
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, mSearchedUserList);
         mSearchedUserListView.setAdapter(adapter);
-        // Check if no view has focus:
+        /*
+        // Force hide keyboard
         View view = this.getCurrentFocus();
         if (view != null) {
             InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
+        */
     }
 
 
@@ -518,6 +446,7 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(this,ChatActivity.class);
         intent.putExtra("selectedUsername",selectedUsername);
         intent.putExtra("session_id",mSession_id);
+        intent.putExtra("thisUsername",mUsername);
         this.startActivity(intent);
     }
 
@@ -559,5 +488,34 @@ public class MainActivity extends AppCompatActivity {
 
     private void showToast(String text){
         Toast.makeText(getApplicationContext(),text,Toast.LENGTH_SHORT).show();
+    }
+
+    public static void hideSoftKeyboard(Activity activity) {
+        InputMethodManager inputMethodManager =
+                (InputMethodManager) activity.getSystemService(
+                        Activity.INPUT_METHOD_SERVICE);
+        inputMethodManager.hideSoftInputFromWindow(
+                activity.getCurrentFocus().getWindowToken(), 0);
+    }
+
+    public void setupUI(View view) {
+
+        // Set up touch listener for non-text box views to hide keyboard.
+        if (!(view instanceof EditText)) {
+            view.setOnTouchListener(new View.OnTouchListener() {
+                public boolean onTouch(View v, MotionEvent event) {
+                    hideSoftKeyboard(MainActivity.this);
+                    return false;
+                }
+            });
+        }
+
+        //If a layout container, iterate over children and seed recursion.
+        if (view instanceof ViewGroup) {
+            for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) {
+                View innerView = ((ViewGroup) view).getChildAt(i);
+                setupUI(innerView);
+            }
+        }
     }
 }

@@ -49,7 +49,9 @@ public class ChatAdapter extends BaseAdapter {
             vi = inflater.inflate(R.layout.chatbubble, null);
 
         TextView msg = (TextView) vi.findViewById(R.id.message_text);
+        TextView datetimeText = (TextView) vi.findViewById(R.id.datetime_text);
         msg.setText(message.body);
+        datetimeText.setText(message.Time + ", " + message.Date);
         LinearLayout layout = (LinearLayout) vi
                 .findViewById(R.id.bubble_layout);
         LinearLayout parent_layout = (LinearLayout) vi
@@ -72,4 +74,12 @@ public class ChatAdapter extends BaseAdapter {
     public void add(ChatMessage object) {
         chatMessageList.add(object);
     }
+
+    public String getLastedSeqno() {
+        if(chatMessageList==null || chatMessageList.isEmpty())
+            return "0";
+        else
+            return chatMessageList.get(chatMessageList.size()-1).msgid;
+    }
+
 }

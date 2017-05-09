@@ -19,9 +19,4 @@ public class ChatMessage {
         senderName = sender;
     }
 
-    public void setMsgID() {
-
-        msgid += "-" + String.format("%02d", new Random().nextInt(100));
-        ;
-    }
 }
