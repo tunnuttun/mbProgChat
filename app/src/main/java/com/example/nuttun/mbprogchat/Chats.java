@@ -75,7 +75,7 @@ public class Chats extends Fragment implements OnClickListener {
         timer2 = new Timer();
         repeatUpdateDb(timer2);
 
-        setupUI(view.findViewById(R.id.chat_parent_layout));
+        //setupUI(view.findViewById(R.id.chat_parent_layout));
         return view;
     }
 
@@ -226,6 +226,7 @@ public class Chats extends Fragment implements OnClickListener {
         Toast.makeText(getActivity(),text,Toast.LENGTH_SHORT).show();
     }
 
+    /*
     public void setupUI(View view) {
 
         // Set up touch listener for non-text box views to hide keyboard.
@@ -254,4 +255,5 @@ public class Chats extends Fragment implements OnClickListener {
         inputMethodManager.hideSoftInputFromWindow(
                 activity.getCurrentFocus().getWindowToken(), 0);
     }
+    */
 }
