@@ -46,13 +46,14 @@ public class updateDbTask extends AsyncTask<Object, Void, Void> {
         JSONArray messageToBeUpdate = new JSONArray();
         while (true){
             hm.put("seqno",lasted_seqno);
+            hm.put("limit","30");
             String result = helper.POST("https://mis.cp.eng.chula.ac.th/mobile/service.php?q=api/getMessage",hm);
             try {
                 JSONObject jsonObject = new JSONObject(result);
                 String type = jsonObject.getString("type");
                 if(type.equalsIgnoreCase("error")){
                     Toast.makeText((Context) objects[0],"Error, try re-login",Toast.LENGTH_SHORT).show();
-                    return null;
+                    break;
                 }
                 JSONArray content = jsonObject.getJSONArray("content");
                 if(content.length()==0) break;

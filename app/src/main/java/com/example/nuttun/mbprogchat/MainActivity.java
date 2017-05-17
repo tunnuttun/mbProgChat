@@ -203,10 +203,11 @@ public class MainActivity extends AppCompatActivity {
                 mContactList=null;
             }
             new ContactListTask().execute();
+
+            //Read and write message database
+            repeatUpdateDb();
         }
 
-        //Read and write message database
-        repeatUpdateDb();
 
     }
 
